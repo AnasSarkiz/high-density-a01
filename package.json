@@ -1,11 +1,15 @@
 {
-  "name": "high-densitya01",
-  "module": "index.ts",
+  "name": "@tscircuit/high-density-a01",
+  "module": "dist/index.js",
   "type": "module",
-  "private": true,
   "scripts": {
-    "start": "cosmos"
+    "start": "cosmos",
+    "build:site": "cosmos-export",
+    "build": "tsup lib/index.ts --dts --format esm"
   },
+  "files": [
+    "dist"
+  ],
   "devDependencies": {
     "@biomejs/biome": "^2.4.4",
     "@tscircuit/solver-utils": "^0.0.15",
@@ -13,7 +17,8 @@
     "bun-match-svg": "^0.0.15",
     "graphics-debug": "^0.0.86",
     "react-cosmos": "^7.1.1",
-    "react-cosmos-plugin-vite": "^7.1.1"
+    "react-cosmos-plugin-vite": "^7.1.1",
+    "tsup": "^8.5.1"
   },
   "peerDependencies": {
     "typescript": "^5"
