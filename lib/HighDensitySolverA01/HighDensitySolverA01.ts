@@ -18,6 +18,7 @@ interface HighDensitySolverA01Props {
   viaDiameter: number
   traceThickness?: number
   traceMargin?: number
+  viaMinDistFromBorder?: number
   hyperParameters?: Partial<HyperParameters>
   initialPenaltyFn?: (params: {
     x: number
@@ -57,6 +58,7 @@ export class HighDensitySolverA01 extends BaseSolver {
   viaDiameter: number
   traceThickness: number
   traceMargin: number
+  viaMinDistFromBorder: number
   hyperParameters: HyperParameters
   initialPenaltyFn?: HighDensitySolverA01Props["initialPenaltyFn"]
 
@@ -93,6 +95,7 @@ export class HighDensitySolverA01 extends BaseSolver {
     this.viaDiameter = props.viaDiameter
     this.traceThickness = props.traceThickness ?? 0.1
     this.traceMargin = props.traceMargin ?? 0.15
+    this.viaMinDistFromBorder = props.viaMinDistFromBorder ?? 1
     this.hyperParameters = {
       shuffleSeed: 0,
       ripCost: 10,
@@ -258,10 +261,17 @@ export class HighDensitySolverA01 extends BaseSolver {
       strokeColor?: string
       strokeWidth?: number
     }> = []
+    const circles: Array<{
+      center: { x: number; y: number }
+      radius: number
+      fill?: string
+      stroke?: string
+    }> = []
     const rects: Array<{
       center: { x: number; y: number }
       width: number
       height: number
+      fill?: string
       stroke?: string
     }> = []
 
@@ -273,6 +283,35 @@ export class HighDensitySolverA01 extends BaseSolver {
       height,
       stroke: "gray",
     })
+
+    // Draw penalty map as transparent rects
+    if (this.penaltyMap) {
+      let maxPenalty = 0
+      for (let row = 0; row < this.rows; row++) {
+        for (let col = 0; col < this.cols; col++) {
+          const p = this.penaltyMap[row]?.[col] ?? 0
+          if (p > maxPenalty) maxPenalty = p
+        }
+      }
+      if (maxPenalty > 0) {
+        for (let row = 0; row < this.rows; row++) {
+          for (let col = 0; col < this.cols; col++) {
+            const p = this.penaltyMap[row]?.[col] ?? 0
+            if (p <= 0) continue
+            const alpha = Math.min(0.6, (p / maxPenalty) * 0.6)
+            rects.push({
+              center: {
+                x: this.gridOrigin.x + (col + 0.5) * this.cellSizeMm,
+                y: this.gridOrigin.y + (row + 0.5) * this.cellSizeMm,
+              },
+              width: this.cellSizeMm,
+              height: this.cellSizeMm,
+              fill: `rgba(255,165,0,${alpha.toFixed(3)})`,
+            })
+          }
+        }
+      }
+    }
 
     // Draw port points colored by layer
     for (const pp of this.nodeWithPortPoints.portPoints) {
@@ -322,6 +361,20 @@ export class HighDensitySolverA01 extends BaseSolver {
       }
     }
 
+    // Draw vias
+    if (this.solvedConnectionsMap) {
+      for (const [, route] of this.solvedConnectionsMap) {
+        for (const via of route.vias) {
+          circles.push({
+            center: { x: via.x, y: via.y },
+            radius: this.viaDiameter / 2,
+            fill: "rgba(0,0,0,0.3)",
+            stroke: "black",
+          })
+        }
+      }
+    }
+
     // Draw active A* exploration
     if (this.activeConnection && this.closedSet) {
       for (const key of this.closedSet) {
@@ -339,6 +392,7 @@ export class HighDensitySolverA01 extends BaseSolver {
     return {
       points,
       lines,
+      circles,
       rects,
       coordinateSystem: "cartesian" as const,
       title: `HighDensityA01 [${this.solvedConnectionsMap?.size ?? 0} solved, ${this.unsolvedConnections?.length ?? 0} remaining]`,
@@ -480,10 +534,25 @@ export class HighDensitySolverA01 extends BaseSolver {
       })
     }
 
-    // Via: move to other layers at same position
-    for (let z = 0; z < this.layers; z++) {
-      if (z === cell.z) continue
-      neighbors.push({ ...cell, z })
+    // Via: move to other layers at same position (if far enough from border)
+    if (this.viaMinDistFromBorder > 0) {
+      const distToEdge = Math.min(
+        cell.col * this.cellSizeMm,
+        (this.cols - 1 - cell.col) * this.cellSizeMm,
+        cell.row * this.cellSizeMm,
+        (this.rows - 1 - cell.row) * this.cellSizeMm,
+      )
+      if (distToEdge >= this.viaMinDistFromBorder) {
+        for (let z = 0; z < this.layers; z++) {
+          if (z === cell.z) continue
+          neighbors.push({ ...cell, z })
+        }
+      }
+    } else {
+      for (let z = 0; z < this.layers; z++) {
+        if (z === cell.z) continue
+        neighbors.push({ ...cell, z })
+      }
     }
 
     return neighbors
@@ -589,6 +658,40 @@ export class HighDensitySolverA01 extends BaseSolver {
   }
 
   ripTrace(connectionName: ConnectionName): void {
+    const route = this.solvedConnectionsMap.get(connectionName)
+
+    // Add rip penalties to the penalty map along the ripped route
+    if (route) {
+      for (const pt of route.route) {
+        const row = Math.round(
+          (pt.y - this.gridOrigin.y) / this.cellSizeMm - 0.5,
+        )
+        const col = Math.round(
+          (pt.x - this.gridOrigin.x) / this.cellSizeMm - 0.5,
+        )
+        if (row >= 0 && row < this.rows && col >= 0 && col < this.cols) {
+          const rowArr = this.penaltyMap[row]
+          if (rowArr) {
+            rowArr[col] = (rowArr[col] ?? 0) + this.hyperParameters.ripTracePenalty
+          }
+        }
+      }
+      for (const via of route.vias) {
+        const row = Math.round(
+          (via.y - this.gridOrigin.y) / this.cellSizeMm - 0.5,
+        )
+        const col = Math.round(
+          (via.x - this.gridOrigin.x) / this.cellSizeMm - 0.5,
+        )
+        if (row >= 0 && row < this.rows && col >= 0 && col < this.cols) {
+          const rowArr = this.penaltyMap[row]
+          if (rowArr) {
+            rowArr[col] = (rowArr[col] ?? 0) + this.hyperParameters.ripViaPenalty
+          }
+        }
+      }
+    }
+
     // Remove from usedCells
     for (let z = 0; z < this.layers; z++) {
       for (let row = 0; row < this.rows; row++) {
@@ -605,7 +708,6 @@ export class HighDensitySolverA01 extends BaseSolver {
     }
 
     // Move from solved back to unsolved
-    const route = this.solvedConnectionsMap.get(connectionName)
     if (route) {
       this.solvedConnectionsMap.delete(connectionName)
       const start = route.route[0]
