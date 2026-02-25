@@ -11,7 +11,9 @@ properties:
 - Rip'n'Replace with History (@tscircuit/hypergraph-inspired)
 - Via Penalty and Trace Penalty Map
 
-<img width="886" height="1184" alt="image" src="https://github.com/user-attachments/assets/4463e513-b231-456d-953d-a15c3d9ae376" />
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/4463e513-b231-456d-953d-a15c3d9ae376" width="320" />
+</p>
 
 ## Usage
 
