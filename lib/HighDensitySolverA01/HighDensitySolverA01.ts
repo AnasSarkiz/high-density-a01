@@ -55,6 +55,7 @@ interface Connection {
 }
 
 export class HighDensitySolverA01 extends BaseSolver {
+  override MAX_ITERATIONS = 500e3
   nodeWithPortPoints: NodeWithPortPoints
   cellSizeMm: number
   viaDiameter: number
@@ -117,9 +118,11 @@ export class HighDensitySolverA01 extends BaseSolver {
     const { nodeWithPortPoints, cellSizeMm } = this
     const { width, height, center } = nodeWithPortPoints
     // Derive available z layers from port points if not provided
-    this.availableZ = nodeWithPortPoints.availableZ ?? [
-      ...new Set(nodeWithPortPoints.portPoints.map((pp) => pp.z)),
-    ].sort((a, b) => a - b)
+    this.availableZ =
+      nodeWithPortPoints.availableZ ??
+      [...new Set(nodeWithPortPoints.portPoints.map((pp) => pp.z))].sort(
+        (a, b) => a - b,
+      )
 
     this.zToLayer = new Map()
     this.layerToZ = new Map()
@@ -439,10 +442,7 @@ export class HighDensitySolverA01 extends BaseSolver {
   // --- Internal helpers ---
 
   buildConnectionsFromPortPoints(): Connection[] {
-    const byName = new Map<
-      ConnectionName,
-      NodeWithPortPoints["portPoints"]
-    >()
+    const byName = new Map<ConnectionName, NodeWithPortPoints["portPoints"]>()
     for (const pp of this.nodeWithPortPoints.portPoints) {
       const name = pp.connectionName
       if (!byName.has(name)) byName.set(name, [])
@@ -466,12 +466,8 @@ export class HighDensitySolverA01 extends BaseSolver {
   }
 
   pointToGridCell(pt: { x: number; y: number; z: number }): GridCell {
-    const col = Math.round(
-      (pt.x - this.gridOrigin.x) / this.cellSizeMm - 0.5,
-    )
-    const row = Math.round(
-      (pt.y - this.gridOrigin.y) / this.cellSizeMm - 0.5,
-    )
+    const col = Math.round((pt.x - this.gridOrigin.x) / this.cellSizeMm - 0.5)
+    const row = Math.round((pt.y - this.gridOrigin.y) / this.cellSizeMm - 0.5)
     const layerIndex = this.zToLayer.get(pt.z) ?? 0
     return {
       row: Math.max(0, Math.min(this.rows - 1, row)),
@@ -503,9 +499,7 @@ export class HighDensitySolverA01 extends BaseSolver {
   }
 
   computeH(a: GridCell, b: GridCell): number {
-    return (
-      (Math.abs(a.row - b.row) + Math.abs(a.col - b.col)) * this.cellSizeMm
-    )
+    return (Math.abs(a.row - b.row) + Math.abs(a.col - b.col)) * this.cellSizeMm
   }
 
   computeG(
@@ -749,7 +743,8 @@ export class HighDensitySolverA01 extends BaseSolver {
         if (row >= 0 && row < this.rows && col >= 0 && col < this.cols) {
           const rowArr = this.penaltyMap[row]
           if (rowArr) {
-            rowArr[col] = (rowArr[col] ?? 0) + this.hyperParameters.ripTracePenalty
+            rowArr[col] =
+              (rowArr[col] ?? 0) + this.hyperParameters.ripTracePenalty
           }
         }
       }
@@ -763,7 +758,8 @@ export class HighDensitySolverA01 extends BaseSolver {
         if (row >= 0 && row < this.rows && col >= 0 && col < this.cols) {
           const rowArr = this.penaltyMap[row]
           if (rowArr) {
-            rowArr[col] = (rowArr[col] ?? 0) + this.hyperParameters.ripViaPenalty
+            rowArr[col] =
+              (rowArr[col] ?? 0) + this.hyperParameters.ripViaPenalty
           }
         }
       }

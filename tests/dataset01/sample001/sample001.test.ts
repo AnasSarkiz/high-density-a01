@@ -13,17 +13,17 @@ test("sample001 solve", { timeout: 120_000 }, async () => {
     viaDiameter: 0.3,
     // showPenaltyMap: true,
     // showUsedCellMap: true,
-    initialPenaltyFn: ({ px, py }) => {
-      const distToEdge = Math.min(
-        px * width,
-        (1 - px) * width,
-        py * height,
-        (1 - py) * height,
-      )
-      if (distToEdge >= borderMargin) return 0
-      const t = 1 - distToEdge / borderMargin
-      return t * t * 2
-    },
+    // initialPenaltyFn: ({ px, py }) => {
+    //   const distToEdge = Math.min(
+    //     px * width,
+    //     (1 - px) * width,
+    //     py * height,
+    //     (1 - py) * height,
+    //   )
+    //   if (distToEdge >= borderMargin) return 0
+    //   const t = 1 - distToEdge / borderMargin
+    //   return t * t * 2
+    // },
   })
 
   solver.MAX_ITERATIONS = 500_000
