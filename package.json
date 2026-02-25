@@ -3,10 +3,20 @@
   "module": "dist/index.js",
   "type": "module",
   "version": "0.0.1",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./wasm": {
+      "import": "./dist/wasm.js",
+      "types": "./dist/wasm.d.ts"
+    }
+  },
   "scripts": {
     "start": "cosmos",
     "build:site": "cosmos-export",
-    "build": "tsup lib/index.ts --dts --format esm"
+    "build": "tsup lib/index.ts lib/wasm.ts --dts --format esm && cp wasm/pkg/highdensity_solver_a01_wasm_bg.wasm dist/"
   },
   "files": [
     "dist"

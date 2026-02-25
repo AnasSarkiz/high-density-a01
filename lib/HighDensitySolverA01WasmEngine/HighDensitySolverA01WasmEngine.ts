@@ -1,4 +1,5 @@
 import { BaseSolver } from "@tscircuit/solver-utils"
+import packageJson from "../../package.json"
 import type { GraphicsObject } from "graphics-debug"
 import init, {
   initSync,
@@ -60,18 +61,22 @@ export async function initHighDensitySolverWasm(
 
     // Node/Bun: read .wasm from disk and use initSync
     if (typeof globalThis.process !== "undefined" && globalThis.process.versions) {
-      const { readFileSync } = await import("fs")
+      const { readFileSync, existsSync } = await import("fs")
       const { resolve, dirname } = await import("path")
       const { fileURLToPath } = await import("url")
       const dir = dirname(fileURLToPath(import.meta.url))
-      const wasmPath = resolve(dir, "../../wasm/pkg/highdensity_solver_a01_wasm_bg.wasm")
+      // Built dist/ has the .wasm copied alongside; source tree has it under wasm/pkg/
+      const distPath = resolve(dir, "highdensity_solver_a01_wasm_bg.wasm")
+      const srcPath = resolve(dir, "../../wasm/pkg/highdensity_solver_a01_wasm_bg.wasm")
+      const wasmPath = existsSync(distPath) ? distPath : srcPath
       const wasmBytes = readFileSync(wasmPath)
       initSync({ module: wasmBytes })
       return
     }
 
-    // Browser: use default fetch-based init
-    await init()
+    // Browser: fetch from jsdelivr
+    const cdnUrl = `https://cdn.jsdelivr.net/npm/@tscircuit/high-density-a01@${packageJson.version}/dist/highdensity_solver_a01_wasm_bg.wasm`
+    await init(cdnUrl)
   })()
 
   return wasmReady
