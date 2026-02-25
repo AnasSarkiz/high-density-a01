@@ -19,6 +19,8 @@ interface HighDensitySolverA01Props {
   traceThickness?: number
   traceMargin?: number
   viaMinDistFromBorder?: number
+  showPenaltyMap?: boolean
+  showUsedCellMap?: boolean
   hyperParameters?: Partial<HyperParameters>
   initialPenaltyFn?: (params: {
     x: number
@@ -59,6 +61,8 @@ export class HighDensitySolverA01 extends BaseSolver {
   traceThickness: number
   traceMargin: number
   viaMinDistFromBorder: number
+  showPenaltyMap: boolean
+  showUsedCellMap: boolean
   hyperParameters: HyperParameters
   initialPenaltyFn?: HighDensitySolverA01Props["initialPenaltyFn"]
 
@@ -96,6 +100,8 @@ export class HighDensitySolverA01 extends BaseSolver {
     this.traceThickness = props.traceThickness ?? 0.1
     this.traceMargin = props.traceMargin ?? 0.15
     this.viaMinDistFromBorder = props.viaMinDistFromBorder ?? 1
+    this.showPenaltyMap = props.showPenaltyMap ?? false
+    this.showUsedCellMap = props.showUsedCellMap ?? false
     this.hyperParameters = {
       shuffleSeed: 0,
       ripCost: 10,
@@ -285,7 +291,7 @@ export class HighDensitySolverA01 extends BaseSolver {
     })
 
     // Draw penalty map as transparent rects
-    if (this.penaltyMap) {
+    if (this.showPenaltyMap && this.penaltyMap) {
       let maxPenalty = 0
       for (let row = 0; row < this.rows; row++) {
         for (let col = 0; col < this.cols; col++) {
@@ -307,6 +313,27 @@ export class HighDensitySolverA01 extends BaseSolver {
               width: this.cellSizeMm,
               height: this.cellSizeMm,
               fill: `rgba(255,165,0,${alpha.toFixed(3)})`,
+            })
+          }
+        }
+      }
+    }
+
+    // Draw used cells as transparent blue rects
+    if (this.showUsedCellMap && this.usedCells) {
+      for (let z = 0; z < this.layers; z++) {
+        for (let row = 0; row < this.rows; row++) {
+          for (let col = 0; col < this.cols; col++) {
+            const occupant = this.usedCells[z]?.[row]?.[col]
+            if (!occupant) continue
+            rects.push({
+              center: {
+                x: this.gridOrigin.x + (col + 0.5) * this.cellSizeMm,
+                y: this.gridOrigin.y + (row + 0.5) * this.cellSizeMm,
+              },
+              width: this.cellSizeMm,
+              height: this.cellSizeMm,
+              fill: "rgba(0,0,255,0.5)",
             })
           }
         }

@@ -11,6 +11,8 @@ test("sample001 solve", { timeout: 120_000 }, async () => {
     nodeWithPortPoints: sample001,
     cellSizeMm: 0.5,
     viaDiameter: 0.3,
+    // showPenaltyMap: true,
+    // showUsedCellMap: true,
     initialPenaltyFn: ({ px, py }) => {
       const distToEdge = Math.min(
         px * width,
