@@ -84,6 +84,9 @@ export class HighDensitySolverA01 extends BaseSolver {
   // Used cells: [z][row][col] -> connectionName or null
   usedCells!: (ConnectionName | null)[][][]
 
+  // Track which cells belong to each connection for fast rip
+  connectionCellKeys!: Map<ConnectionName, Set<CellKey>>
+
   // Connection queues
   unsolvedConnections!: Connection[]
   solvedConnectionsMap!: Map<ConnectionName, HighDensityIntraNodeRoute>
@@ -132,8 +135,8 @@ export class HighDensitySolverA01 extends BaseSolver {
       this.layerToZ.set(i, z)
     }
 
-    this.rows = Math.ceil(height / cellSizeMm)
-    this.cols = Math.ceil(width / cellSizeMm)
+    this.rows = Math.floor(height / cellSizeMm)
+    this.cols = Math.floor(width / cellSizeMm)
     this.layers = this.availableZ.length
     this.gridOrigin = {
       x: center.x - width / 2,
@@ -162,6 +165,7 @@ export class HighDensitySolverA01 extends BaseSolver {
     // Build connections from port points
     this.unsolvedConnections = this.buildConnectionsFromPortPoints()
     this.solvedConnectionsMap = new Map()
+    this.connectionCellKeys = new Map()
 
     // Shuffle based on seed
     this.shuffleConnections()
@@ -210,9 +214,15 @@ export class HighDensitySolverA01 extends BaseSolver {
       return
     }
 
-    // 3. Dequeue best candidate (lowest f)
-    this.openSet.sort((a, b) => a.f - b.f)
-    const current = this.openSet.shift()!
+    // 3. Dequeue best candidate (lowest f) via O(n) min-extraction
+    let bestIdx = 0
+    for (let i = 1; i < this.openSet.length; i++) {
+      if (this.openSet[i]!.f < this.openSet[bestIdx]!.f) bestIdx = i
+    }
+    const current = this.openSet[bestIdx]!
+    // Swap with last and pop for O(1) removal
+    this.openSet[bestIdx] = this.openSet[this.openSet.length - 1]!
+    this.openSet.pop()
 
     const { cell } = current
     const cellKey = this.getCellKey(cell)
@@ -648,6 +658,9 @@ export class HighDensitySolverA01 extends BaseSolver {
       this.ripTrace(rippedName)
     }
 
+    // Track cells owned by this connection
+    const cellKeys = new Set<CellKey>()
+
     // Mark cells as used (including margin cells around the trace)
     const marginCells = Math.ceil(this.traceMargin / this.cellSizeMm)
     for (const pt of routePoints) {
@@ -667,6 +680,7 @@ export class HighDensitySolverA01 extends BaseSolver {
             const rowArr = layer[r]
             if (rowArr) {
               rowArr[c] = connName
+              cellKeys.add(`${pt.z},${r},${c}`)
             }
           }
         }
@@ -701,6 +715,7 @@ export class HighDensitySolverA01 extends BaseSolver {
                     displacedByVias.add(existing)
                   }
                   rowArr[c] = connName
+                  cellKeys.add(`${z},${r},${c}`)
                 }
               }
             }
@@ -708,6 +723,9 @@ export class HighDensitySolverA01 extends BaseSolver {
         }
       }
     }
+
+    // Store tracked cells for this connection
+    this.connectionCellKeys.set(connName, cellKeys)
 
     // Rip any connections displaced by via footprints
     for (const displaced of displacedByVias) {
@@ -765,19 +783,23 @@ export class HighDensitySolverA01 extends BaseSolver {
       }
     }
 
-    // Remove from usedCells
-    for (let z = 0; z < this.layers; z++) {
-      for (let row = 0; row < this.rows; row++) {
-        for (let col = 0; col < this.cols; col++) {
-          const layer = this.usedCells[z]
-          if (layer) {
-            const rowArr = layer[row]
-            if (rowArr && rowArr[col] === connectionName) {
-              rowArr[col] = null
-            }
+    // Remove from usedCells using tracked cell keys (O(cells) instead of full grid scan)
+    const trackedCells = this.connectionCellKeys.get(connectionName)
+    if (trackedCells) {
+      for (const key of trackedCells) {
+        const parts = key.split(",")
+        const z = Number(parts[0])
+        const r = Number(parts[1])
+        const c = Number(parts[2])
+        const layer = this.usedCells[z]
+        if (layer) {
+          const rowArr = layer[r]
+          if (rowArr && rowArr[c] === connectionName) {
+            rowArr[c] = null
           }
         }
       }
+      this.connectionCellKeys.delete(connectionName)
     }
 
     // Move from solved back to unsolved
