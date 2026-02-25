@@ -237,10 +237,20 @@ export class HighDensitySolverA01 extends BaseSolver {
       const f = g + this.computeH(neighbor, this.activeConnection.end)
 
       const rippedTraces = new Set(current.rippedTraces)
-      const occupant =
-        this.usedCells[neighbor.z]?.[neighbor.row]?.[neighbor.col]
-      if (occupant && occupant !== this.activeConnection.connectionName) {
-        rippedTraces.add(occupant)
+      if (neighbor.z !== cell.z) {
+        // Via transition: track all connections in via footprint
+        const footprintOccupants = this.getViaFootprintOccupants(neighbor)
+        for (const occupant of footprintOccupants) {
+          if (occupant !== this.activeConnection.connectionName) {
+            rippedTraces.add(occupant)
+          }
+        }
+      } else {
+        const occupant =
+          this.usedCells[neighbor.z]?.[neighbor.row]?.[neighbor.col]
+        if (occupant && occupant !== this.activeConnection.connectionName) {
+          rippedTraces.add(occupant)
+        }
       }
 
       this.openSet.push({
@@ -519,15 +529,24 @@ export class HighDensitySolverA01 extends BaseSolver {
     cost += this.penaltyMap[to.row]?.[to.col] ?? 0
 
     // Rip cost for occupied cells
-    const occupant = this.usedCells[to.z]?.[to.row]?.[to.col]
-    if (occupant && occupant !== this.activeConnection?.connectionName) {
-      if (!rippedTraces.has(occupant)) {
-        cost += this.hyperParameters.ripCost
+    if (from.z !== to.z) {
+      // Via transition: account for full via footprint on all layers
+      const footprintOccupants = this.getViaFootprintOccupants(to)
+      for (const occupant of footprintOccupants) {
+        if (occupant === this.activeConnection?.connectionName) continue
+        if (!rippedTraces.has(occupant)) {
+          cost += this.hyperParameters.ripCost
+        }
+        cost += this.hyperParameters.ripViaPenalty
       }
-      cost +=
-        from.z !== to.z
-          ? this.hyperParameters.ripViaPenalty
-          : this.hyperParameters.ripTracePenalty
+    } else {
+      const occupant = this.usedCells[to.z]?.[to.row]?.[to.col]
+      if (occupant && occupant !== this.activeConnection?.connectionName) {
+        if (!rippedTraces.has(occupant)) {
+          cost += this.hyperParameters.ripCost
+        }
+        cost += this.hyperParameters.ripTracePenalty
+      }
     }
 
     return cost
@@ -583,6 +602,25 @@ export class HighDensitySolverA01 extends BaseSolver {
     }
 
     return neighbors
+  }
+
+  /** Get unique connection names occupying cells in the via footprint at a position */
+  getViaFootprintOccupants(cell: GridCell): Set<ConnectionName> {
+    const occupants = new Set<ConnectionName>()
+    const viaRadiusCells = Math.ceil(this.viaDiameter / 2 / this.cellSizeMm)
+    for (let z = 0; z < this.layers; z++) {
+      for (let dr = -viaRadiusCells; dr <= viaRadiusCells; dr++) {
+        for (let dc = -viaRadiusCells; dc <= viaRadiusCells; dc++) {
+          if (dr * dr + dc * dc > viaRadiusCells * viaRadiusCells) continue
+          const r = cell.row + dr
+          const c = cell.col + dc
+          if (r < 0 || r >= this.rows || c < 0 || c >= this.cols) continue
+          const occupant = this.usedCells[z]?.[r]?.[c]
+          if (occupant) occupants.add(occupant)
+        }
+      }
+    }
+    return occupants
   }
 
   finalizeRoute(candidate: CandidateCell): void {
@@ -642,7 +680,10 @@ export class HighDensitySolverA01 extends BaseSolver {
     }
 
     // Mark via footprint cells (vias occupy more cells based on viaDiameter)
+    // Also detect any connections displaced by the via footprint that A* may
+    // not have tracked (safety net for footprint-vs-trace overlaps)
     const viaRadiusCells = Math.ceil(this.viaDiameter / 2 / this.cellSizeMm)
+    const displacedByVias = new Set<ConnectionName>()
     for (const via of vias) {
       const viaRow = Math.round(
         (via.y - this.gridOrigin.y) / this.cellSizeMm - 0.5,
@@ -661,6 +702,10 @@ export class HighDensitySolverA01 extends BaseSolver {
               if (layer) {
                 const rowArr = layer[r]
                 if (rowArr) {
+                  const existing = rowArr[c]
+                  if (existing && existing !== connName) {
+                    displacedByVias.add(existing)
+                  }
                   rowArr[c] = connName
                 }
               }
@@ -668,6 +713,11 @@ export class HighDensitySolverA01 extends BaseSolver {
           }
         }
       }
+    }
+
+    // Rip any connections displaced by via footprints
+    for (const displaced of displacedByVias) {
+      this.ripTrace(displaced)
     }
 
     // Store solved route (map layer indices back to real z values)

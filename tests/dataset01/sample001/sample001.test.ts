@@ -26,7 +26,7 @@ test("sample001 solve", { timeout: 120_000 }, async () => {
     },
   })
 
-  solver.MAX_ITERATIONS = 200_000
+  solver.MAX_ITERATIONS = 500_000
   solver.solve()
 
   console.log(
