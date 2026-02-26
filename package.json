@@ -7,17 +7,12 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
-    },
-    "./wasm": {
-      "import": "./dist/wasm.js",
-      "types": "./dist/wasm.d.ts"
     }
   },
   "scripts": {
     "start": "cosmos",
     "build:site": "bun run build && cosmos-export",
-    "build:wasm": "cd wasm && wasm-pack build --target web --release",
-    "build": "bun run build:wasm && tsup lib/index.ts lib/wasm.ts --dts --format esm && cp wasm/pkg/highdensity_solver_a01_wasm_bg.wasm dist/",
+    "build": "tsup lib/index.ts --dts --format esm",
     "format": "biome format --write .",
     "format:check": "biome format ."
   },
