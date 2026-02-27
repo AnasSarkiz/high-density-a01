@@ -5,6 +5,7 @@ import {
   convertDataset02SampleToNodeWithPortPoints,
   type Dataset02Sample,
 } from "../../lib/dataset02/convertDataset02SampleToNodeWithPortPoints"
+import { defaultParams } from "../../lib/default-params"
 import { HighDensitySolverA01 } from "../../lib/HighDensitySolverA01/HighDensitySolverA01"
 
 const dataset02 = dataset02Json as Dataset02Sample[]
@@ -71,9 +72,8 @@ export default function Dataset02SampleSelectorFixture() {
         key={`dataset02-${safeSampleNumber}`}
         createSolver={() => {
           const solver = new HighDensitySolverA01({
+            ...defaultParams,
             nodeWithPortPoints,
-            cellSizeMm: 0.5,
-            viaDiameter: 0.4,
           })
           solver.MAX_ITERATIONS = 10_000_000
           return solver

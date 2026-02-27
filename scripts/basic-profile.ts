@@ -1,3 +1,4 @@
+import { defaultParams } from "../lib/default-params"
 import { HighDensitySolverA01 } from "../lib/HighDensitySolverA01/HighDensitySolverA01"
 // import {
 //   HighDensitySolverA01WasmEngine,
@@ -9,7 +10,6 @@ type ProfileSample = {
   name: string
   nodeWithPortPoints: typeof sample001
   cellSizeMm: number
-  viaDiameter: number
   maxIterations: number
 }
 
@@ -18,7 +18,6 @@ const profileSamples: ProfileSample[] = [
     name: "sample001",
     nodeWithPortPoints: sample001,
     cellSizeMm: 0.5,
-    viaDiameter: 0.3,
     maxIterations: 100_000_000,
   },
 ]
@@ -26,9 +25,9 @@ const profileSamples: ProfileSample[] = [
 // --- TypeScript solver ---
 for (const sample of profileSamples) {
   const solver = new HighDensitySolverA01({
+    ...defaultParams,
     nodeWithPortPoints: sample.nodeWithPortPoints,
     cellSizeMm: sample.cellSizeMm,
-    viaDiameter: sample.viaDiameter,
   })
 
   solver.MAX_ITERATIONS = sample.maxIterations
@@ -49,7 +48,6 @@ for (const sample of profileSamples) {
 //   const solver = new HighDensitySolverA01WasmEngine({
 //     nodeWithPortPoints: sample.nodeWithPortPoints,
 //     cellSizeMm: sample.cellSizeMm,
-//     viaDiameter: sample.viaDiameter,
 //   })
 
 //   solver.MAX_ITERATIONS = sample.maxIterations

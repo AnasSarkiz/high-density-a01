@@ -131,7 +131,7 @@ interface HyperParameters {
   viaBaseCost: number
 }
 
-interface HighDensitySolverA01Props {
+export interface HighDensitySolverA01Props {
   nodeWithPortPoints: NodeWithPortPoints
   cellSizeMm: number
   viaDiameter: number

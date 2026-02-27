@@ -1,20 +1,20 @@
-import { test, expect, setDefaultTimeout } from "bun:test"
+import { expect, setDefaultTimeout, test } from "bun:test"
 
 setDefaultTimeout(120_000)
 import "bun-match-svg"
 import "graphics-debug/matcher"
+import { defaultParams } from "../../../lib/default-params"
 import { HighDensitySolverA01 } from "../../../lib/HighDensitySolverA01/HighDensitySolverA01"
-import sample002 from "./sample002.json"
 import {
   findSameLayerIntersections,
   validateNoIntersections,
 } from "../../fixtures/validateNoIntersections"
+import sample002 from "./sample002.json"
 
 function createSolver() {
   const solver = new HighDensitySolverA01({
+    ...defaultParams,
     nodeWithPortPoints: sample002,
-    cellSizeMm: 0.1,
-    viaDiameter: 0.3,
   })
   solver.solve()
   return solver
