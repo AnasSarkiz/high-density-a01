@@ -129,6 +129,7 @@ interface HyperParameters {
   ripTracePenalty: number
   ripViaPenalty: number
   viaBaseCost: number
+  greedyMultiplier: number
 }
 
 function toRootNetName(
@@ -199,6 +200,7 @@ export class HighDensitySolverA01 extends BaseSolver {
   private usedDiagFlat!: Int32Array // layers * (rows-1) * (cols-1) * 2; -1 = empty
   private penalty2d!: Float64Array // planeSize
   private visitedStamp!: Uint32Array // layers * planeSize
+  private sharedCrossRootPortCells!: Set<number>
   private stamp = 0
 
   // --- Precomputed via footprint offsets ---
@@ -278,6 +280,7 @@ export class HighDensitySolverA01 extends BaseSolver {
       ripTracePenalty: 0.5,
       ripViaPenalty: 0.75,
       viaBaseCost: 0.1,
+      greedyMultiplier: 1.5,
       ...props.hyperParameters,
     }
     this.MAX_ITERATIONS = 100e6
@@ -394,11 +397,20 @@ export class HighDensitySolverA01 extends BaseSolver {
     // Build and shuffle connections
     this.unsolvedSegs = this.buildConnectionSegs()
 
+    this.sharedCrossRootPortCells = new Set()
+    const rootByPortFlat = new Map<number, string>()
     for (const pp of this.nodeWithPortPoints.portPoints) {
       const connId = this.connNameToId.get(pp.connectionName)
       if (connId === undefined) continue
       const cell = this.pointToCell(pp)
       const flatIdx = (cell.z * this.rows + cell.row) * this.cols + cell.col
+      const rootNet = this.connIdToRootNet[connId]!
+      const existingRoot = rootByPortFlat.get(flatIdx)
+      if (existingRoot === undefined) {
+        rootByPortFlat.set(flatIdx, rootNet)
+      } else if (existingRoot !== rootNet) {
+        this.sharedCrossRootPortCells.add(flatIdx)
+      }
       const existing = this.portOwnerFlat[flatIdx]!
       if (existing === -1 || existing === connId) {
         this.portOwnerFlat[flatIdx] = connId
@@ -451,16 +463,17 @@ export class HighDensitySolverA01 extends BaseSolver {
         next.endRow,
         next.endCol,
       )
+      const f = h * this.hyperParameters.greedyMultiplier
       this.nodePool.push({
         z: next.startZ,
         row: next.startRow,
         col: next.startCol,
         g: 0,
-        f: h,
+        f,
         parentIdx: -1,
         ripped: null,
       })
-      this.heap.push(h, this.seqCounter++, 0)
+      this.heap.push(f, this.seqCounter++, 0)
       return
     }
 
@@ -541,7 +554,10 @@ export class HighDensitySolverA01 extends BaseSolver {
       this.computeMoveCostAndRips(activeConn, z, row, col, z, nr, nc, ripped)
       if (this._moveCost < 0) continue
       const g2 = g + this._moveCost
-      const f2 = g2 + this.computeH(z, nr, nc, endZ, endRow, endCol)
+      const f2 =
+        g2 +
+        this.computeH(z, nr, nc, endZ, endRow, endCol) *
+          this.hyperParameters.greedyMultiplier
 
       const newNodeIdx = this.nodePool.length
       this.nodePool.push({
@@ -582,7 +598,10 @@ export class HighDensitySolverA01 extends BaseSolver {
         )
         if (this._moveCost < 0) continue
         const g2 = g + this._moveCost
-        const f2 = g2 + this.computeH(nz, row, col, endZ, endRow, endCol)
+        const f2 =
+          g2 +
+          this.computeH(nz, row, col, endZ, endRow, endCol) *
+            this.hyperParameters.greedyMultiplier
 
         const newNodeIdx = this.nodePool.length
         this.nodePool.push({
@@ -949,6 +968,20 @@ export class HighDensitySolverA01 extends BaseSolver {
       idx = n.parentIdx
     }
     cells.reverse()
+
+    while (cells.length > 1) {
+      const first = cells[0]!
+      const firstFlat =
+        (first.z * this.rows + first.row) * this.cols + first.col
+      if (!this.sharedCrossRootPortCells.has(firstFlat)) break
+      cells.shift()
+    }
+    while (cells.length > 1) {
+      const last = cells[cells.length - 1]!
+      const lastFlat = (last.z * this.rows + last.row) * this.cols + last.col
+      if (!this.sharedCrossRootPortCells.has(lastFlat)) break
+      cells.pop()
+    }
 
     // Detect vias (z-level changes)
     const viaCells: Array<{ row: number; col: number }> = []
