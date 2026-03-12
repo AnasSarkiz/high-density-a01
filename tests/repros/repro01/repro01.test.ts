@@ -3,16 +3,24 @@ import { expect, setDefaultTimeout, test } from "bun:test"
 setDefaultTimeout(120_000)
 import "bun-match-svg"
 import "graphics-debug/matcher"
-import { defaultParams } from "../../../lib/default-params"
-import { HighDensitySolverA01 } from "../../../lib/HighDensitySolverA01/HighDensitySolverA01"
+import { defaultA02Params } from "../../../lib/default-params"
+import { HighDensitySolverA02 } from "../../../lib/HighDensitySolverA02/HighDensitySolverA02"
+import { validateNoIntersections } from "../../fixtures/validateNoIntersections"
 import repro01 from "./repro01.json"
 
 function createSolver() {
-  const solver = new HighDensitySolverA01({
-    ...defaultParams,
+  const solver = new HighDensitySolverA02({
+    ...defaultA02Params,
     nodeWithPortPoints: repro01.nodeWithPortPoints,
+    enableDeferredConflictRepair: true,
+    maxDeferredRepairPasses: 48,
+    edgePenaltyStrength: 0.2,
+    hyperParameters: {
+      ripCost: 1,
+      greedyMultiplier: 1.2,
+    },
   })
-  solver.MAX_ITERATIONS = 10_000_000
+  solver.MAX_ITERATIONS = 20_000_000
   solver.solve()
   return solver
 }
@@ -20,24 +28,10 @@ function createSolver() {
 test("repro01 snapshot", async () => {
   const solver = createSolver()
 
-  console.log(
-    `solved=${solver.solved} failed=${solver.failed} iterations=${solver.iterations} error=${solver.error}`,
-  )
-  console.log(
-    `routes=${solver.solvedConnectionsMap.size} unsolved=${solver.unsolvedConnections.length}`,
-  )
-  if (solver.activeConnection) {
-    console.log(`stuck on: ${solver.activeConnection.connectionName}`, {
-      start: solver.activeConnection.start,
-      end: solver.activeConnection.end,
-      openSetSize: solver.openSet.length,
-    })
-  }
-
   const graphics = solver.visualize()
+  validateNoIntersections(solver.getOutput())
 
   await expect(graphics).toMatchGraphicsSvg(import.meta.path)
   expect(solver.iterations).toBeGreaterThan(0)
-  // Repro currently exhausts MAX_ITERATIONS; keep the snapshot until solving is fixed.
-  // expect(solver.solved).toBeTrue()
+  expect(solver.solved).toBeTrue()
 })
