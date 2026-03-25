@@ -9,6 +9,7 @@ export interface MaxIterationsByNodeSizeAndConnectionCountResult {
   states: number
   traceCount: number
   adaptiveMaxIterations: number
+  dynamicFloor: number
   effectiveMaxIterations: number
   baseSearchBudget: number
 }
@@ -23,15 +24,24 @@ export function computeMaxIterationsByNodeSizeAndConnectionCount(
   const states = Math.max(1, input.planeSize * input.layers)
   const traceCount = Math.max(0, input.traceCount)
   const traceFactor = Math.sqrt(traceCount)
+  const requestedMaxIterations = Math.max(1, input.maxIterations)
 
   const adaptiveMaxIterations = clamp(
     Math.round(states * (8 + 1.2 * traceFactor)),
     150_000,
     12_000_000,
   )
+  const dynamicFloor = clamp(
+    Math.round(requestedMaxIterations * 0.2),
+    150_000,
+    2_000_000,
+  )
   const effectiveMaxIterations = Math.max(
     1,
-    Math.min(Math.max(1, input.maxIterations), adaptiveMaxIterations),
+    Math.min(
+      requestedMaxIterations,
+      Math.max(dynamicFloor, adaptiveMaxIterations),
+    ),
   )
   const baseSearchBudget = clamp(
     Math.round(states * (10 + 0.8 * traceFactor)),
@@ -43,6 +53,7 @@ export function computeMaxIterationsByNodeSizeAndConnectionCount(
     states,
     traceCount,
     adaptiveMaxIterations,
+    dynamicFloor,
     effectiveMaxIterations,
     baseSearchBudget,
   }

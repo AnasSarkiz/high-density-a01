@@ -246,6 +246,8 @@ export class HighDensitySolverA01 extends BaseSolver {
   private consecutiveSkips = 0
   private penaltyCap!: number
   private adaptiveTraceCount = 0
+  private adaptiveMaxIterations = 1
+  private adaptiveDynamicFloor = 1
   private effectiveMaxIterations = 1
   private adaptiveBaseSearchBudget = 50_000
 
@@ -278,6 +280,8 @@ export class HighDensitySolverA01 extends BaseSolver {
       layers: this.layers || 0,
       states: (this.planeSize || 0) * (this.layers || 0),
       traceCount: this.adaptiveTraceCount,
+      adaptiveMaxIterations: this.adaptiveMaxIterations,
+      dynamicFloor: this.adaptiveDynamicFloor,
       effectiveMaxIterations: this.effectiveMaxIterations,
     }
   }
@@ -480,6 +484,8 @@ export class HighDensitySolverA01 extends BaseSolver {
       maxIterations: this.MAX_ITERATIONS,
     })
     this.adaptiveTraceCount = adaptiveBudget.traceCount
+    this.adaptiveMaxIterations = adaptiveBudget.adaptiveMaxIterations
+    this.adaptiveDynamicFloor = adaptiveBudget.dynamicFloor
     this.effectiveMaxIterations = adaptiveBudget.effectiveMaxIterations
     this.adaptiveBaseSearchBudget = adaptiveBudget.baseSearchBudget
 
