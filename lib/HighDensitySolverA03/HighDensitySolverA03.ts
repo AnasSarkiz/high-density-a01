@@ -3,6 +3,7 @@ import {
   type AffineTransform,
   applyAffineTransformToPoint,
 } from "../gridToAffineTransform"
+import { computeMaxIterationsByNodeSizeAndConnectionCount } from "../maxIterationsByNodeSizeAndConnectionCount"
 import type { HighDensityIntraNodeRoute, NodeWithPortPoints } from "../types"
 
 type ConnId = number
@@ -421,6 +422,9 @@ export class HighDensitySolverA03 extends BaseSolver {
   private searchIterations = 0
   private consecutiveSkips = 0
   private penaltyCap!: number
+  private adaptiveTraceCount = 0
+  private effectiveMaxIterations = 1
+  private adaptiveBaseSearchBudget = 50_000
 
   private _moveCost = 0
   private _moveRippedHead = -1
@@ -478,6 +482,8 @@ export class HighDensitySolverA03 extends BaseSolver {
       cells: this.planeSize || 0,
       layers: this.layers || 0,
       states: (this.planeSize || 0) * (this.layers || 0),
+      traceCount: this.adaptiveTraceCount,
+      effectiveMaxIterations: this.effectiveMaxIterations,
       ripStateBuckets: this.ripStateBuckets || 0,
       neighborEdges: this.neighborIds?.length ?? 0,
       regionCounts: this.regions
@@ -658,9 +664,19 @@ export class HighDensitySolverA03 extends BaseSolver {
     this.solvedRoutes = []
     this.usedIndicesByConn = []
     this.ripCount = []
+    this.totalRipEvents = 0
     this.consecutiveSkips = 0
     this.penaltyCap = this.hyperParameters.ripCost * 0.5
     this.shuffleConnections()
+    const adaptiveBudget = computeMaxIterationsByNodeSizeAndConnectionCount({
+      planeSize: this.planeSize,
+      layers: this.layers,
+      traceCount: this.unsolvedSegs.length,
+      maxIterations: this.MAX_ITERATIONS,
+    })
+    this.adaptiveTraceCount = adaptiveBudget.traceCount
+    this.effectiveMaxIterations = adaptiveBudget.effectiveMaxIterations
+    this.adaptiveBaseSearchBudget = adaptiveBudget.baseSearchBudget
 
     this.activeConnSeg = null
     this.activeConnId = -1
@@ -1027,6 +1043,12 @@ export class HighDensitySolverA03 extends BaseSolver {
   }
 
   private stepOnce(): void {
+    if (this.iterations >= this.effectiveMaxIterations) {
+      this.error = `${this.getSolverName()} ran out of iterations`
+      this.failed = true
+      return
+    }
+
     if (!this.activeConnSeg) {
       if (this.unsolvedSegs.length === 0) {
         this.solved = true
@@ -1069,10 +1091,8 @@ export class HighDensitySolverA03 extends BaseSolver {
 
     this.searchIterations++
     const connRips = this.ripCount[this.activeConnId] ?? 0
-    const baseBudget = this.planeSize * this.layers * 60
-    const budget = Math.min(
-      baseBudget * (1 + connRips * 0.5),
-      this.planeSize * this.layers * 600,
+    const budget = Math.round(
+      this.adaptiveBaseSearchBudget * (1 + Math.min(connRips, 10) * 0.25),
     )
     if (this.searchIterations > budget) {
       const pen = this.penalty2d
