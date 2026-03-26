@@ -1,17 +1,18 @@
 export interface MaxIterationsByNodeSizeAndConnectionCountInput {
   planeSize: number
   layers: number
-  traceCount: number
+  connectionCount: number
+  effort: number
   maxIterations: number
 }
 
 export interface MaxIterationsByNodeSizeAndConnectionCountResult {
   states: number
-  traceCount: number
-  adaptiveMaxIterations: number
-  dynamicFloor: number
-  effectiveMaxIterations: number
-  baseSearchBudget: number
+  connectionCount: number
+  computedMaxIters: number
+  minIterationBudgetIters: number
+  maxIterationsIters: number
+  baseSearchBudgetIters: number
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -22,39 +23,46 @@ export function computeMaxIterationsByNodeSizeAndConnectionCount(
   input: MaxIterationsByNodeSizeAndConnectionCountInput,
 ): MaxIterationsByNodeSizeAndConnectionCountResult {
   const states = Math.max(1, input.planeSize * input.layers)
-  const traceCount = Math.max(0, input.traceCount)
-  const traceFactor = Math.sqrt(traceCount)
+  const connectionCount = Math.max(0, input.connectionCount)
+  const connectionFactor = Math.sqrt(connectionCount)
+  const effortMultiplier =
+    Number.isFinite(input.effort) && input.effort > 0 ? input.effort : 1
   const requestedMaxIterations = Math.max(1, input.maxIterations)
 
-  const adaptiveMaxIterations = clamp(
-    Math.round(states * (8 + 1.2 * traceFactor)),
+  const baseComputedMaxIterations = clamp(
+    Math.round(states * (8 + 1.2 * connectionFactor)),
     150_000,
     12_000_000,
   )
-  const dynamicFloor = clamp(
+  const computedMaxIters = clamp(
+    Math.round(baseComputedMaxIterations * effortMultiplier),
+    150_000,
+    12_000_000,
+  )
+  const minIterationBudgetIters = clamp(
     Math.round(requestedMaxIterations * 0.2),
     150_000,
     2_000_000,
   )
-  const effectiveMaxIterations = Math.max(
+  const maxIterationsIters = Math.max(
     1,
     Math.min(
       requestedMaxIterations,
-      Math.max(dynamicFloor, adaptiveMaxIterations),
+      Math.max(minIterationBudgetIters, computedMaxIters),
     ),
   )
-  const baseSearchBudget = clamp(
-    Math.round(states * (10 + 0.8 * traceFactor)),
+  const baseSearchBudgetIters = clamp(
+    Math.round(states * (10 + 0.8 * connectionFactor) * effortMultiplier),
     50_000,
     4_000_000,
   )
 
   return {
     states,
-    traceCount,
-    adaptiveMaxIterations,
-    dynamicFloor,
-    effectiveMaxIterations,
-    baseSearchBudget,
+    connectionCount,
+    computedMaxIters,
+    minIterationBudgetIters,
+    maxIterationsIters,
+    baseSearchBudgetIters,
   }
 }
